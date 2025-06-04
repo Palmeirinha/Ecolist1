@@ -15,13 +15,7 @@
             <form action="{{ route('alimentos.store') }}" method="POST">
                 @csrf
                 <div class="mb-4">
-                    <label for="nome" class="block text-gray-700 font-semibold mb-1">Nome</label>
-                    <input type="text" name="nome" id="nome"
-                           class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
-                           value="{{ old('nome', $alimento->nome ?? '') }}">
-                    @error('nome')
-                        <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
-                    @enderror
+                    <x-input-group name="nome" label="Nome do alimento" required />
                 </div>
                 <div class="mb-4">
                     <label for="tipo_quantidade" class="block text-gray-700">Tipo de quantidade</label>

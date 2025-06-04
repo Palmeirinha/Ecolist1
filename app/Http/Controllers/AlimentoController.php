@@ -5,6 +5,7 @@ use App\Models\Alimento;
 use Illuminate\Http\Request;
 use App\Services\ReceitaService;
 use App\Models\Categoria;
+use App\Http\Requests\AlimentoRequest;
 
 class AlimentoController extends Controller
 {
@@ -44,33 +45,8 @@ class AlimentoController extends Controller
     /**
      * Salva um novo alimento no banco de dados.
      */
-    public function store(Request $request)
+    public function store(AlimentoRequest $request)
     {
-        // Validação dos dados do formulário
-        $request->validate([
-            'nome' => 'required|string|max:255|regex:/^[A-Za-zÀ-ú\s]+$/',
-            'tipo_quantidade' => 'required|in:unidade,quilo,litro',
-            'quantidade' => [
-                'required',
-                'integer',
-                'min:1',
-                function($attribute, $value, $fail) use ($request) {
-                    if ($request->tipo_quantidade === 'quilo' && $value > 10) {
-                        $fail('A quantidade em quilos não pode ser maior que 10.');
-                    }
-                    if ($request->tipo_quantidade === 'unidade' && $value > 100) {
-                        $fail('A quantidade em unidades não pode ser maior que 100.');
-                    }
-                }
-            ],
-            'validade' => 'required|date|after_or_equal:today',
-        ], [
-            'nome.required' => 'O nome do alimento é obrigatório.',
-            'nome.regex' => 'O nome deve conter apenas letras e espaços.',
-            'quantidade.min' => 'A quantidade deve ser pelo menos 1.',
-            'validade.after_or_equal' => 'A validade deve ser uma data futura.',
-        ]);
-
         // --- INÍCIO DA VERIFICAÇÃO DE NOME X CATEGORIA ---
         $mapaCategoria = [
             'frutas' => ['maçã', 'banana', 'melancia', 'limão', 'laranja', 'manga', 'uva', 'abacaxi', 'goiaba', 'morango', 'kiwi', 'pera', 'pêssego', 'ameixa', 'caju', 'graviola', 'acerola', 'framboesa', 'maracujá', 'figo'],
@@ -160,37 +136,12 @@ class AlimentoController extends Controller
     /**
      * Atualiza os dados de um alimento existente.
      */
-    public function update(Request $request, Alimento $alimento)
+    public function update(AlimentoRequest $request, Alimento $alimento)
     {
         // Garante que só o dono pode editar
         if ($alimento->user_id !== auth()->id()) {
             abort(403);
         }
-
-        // Validação dos dados do formulário
-        $request->validate([
-            'nome' => 'required|string|max:255|regex:/^[A-Za-zÀ-ú\s]+$/',
-            'tipo_quantidade' => 'required|in:unidade,quilo,litro',
-            'quantidade' => [
-                'required',
-                'integer',
-                'min:1',
-                function($attribute, $value, $fail) use ($request) {
-                    if ($request->tipo_quantidade === 'quilo' && $value > 10) {
-                        $fail('A quantidade em quilos não pode ser maior que 10.');
-                    }
-                    if ($request->tipo_quantidade === 'unidade' && $value > 100) {
-                        $fail('A quantidade em unidades não pode ser maior que 100.');
-                    }
-                }
-            ],
-            'validade' => 'required|date|after_or_equal:today',
-        ], [
-            'nome.required' => 'O nome do alimento é obrigatório.',
-            'nome.regex' => 'O nome deve conter apenas letras e espaços.',
-            'quantidade.min' => 'A quantidade deve ser pelo menos 1.',
-            'validade.after_or_equal' => 'A validade deve ser uma data futura.',
-        ]);
 
         // --- INÍCIO DA VERIFICAÇÃO DE NOME X CATEGORIA ---
         $mapaCategoria = [
