@@ -9,6 +9,13 @@ use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 class Kernel extends ConsoleKernel
 {
     /**
+     * Comandos customizados registrados manualmente.
+     */
+    protected $commands = [
+        \App\Console\Commands\AlertaVencimentoAlimentos::class,
+    ];
+
+    /**
      * Define o agendamento dos comandos.
      * Aqui você pode agendar tarefas para serem executadas periodicamente.
      */

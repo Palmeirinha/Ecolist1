@@ -33,6 +33,7 @@
                                 <th class="py-2 px-4 bg-gray-100">Quantidade</th>
                                 <th class="py-2 px-4 bg-gray-100">Validade</th>
                                 <th class="py-2 px-4 bg-gray-100">Categoria</th>
+                                <th class="py-2 px-4 bg-gray-100">Sugestão de Receita</th> <!-- Nova coluna -->
                                 <th class="py-2 px-4 bg-gray-100">Ações</th>
                             </tr>
                         </thead>
@@ -43,6 +44,13 @@
                                     <td class="py-2 px-4">{{ $alimento->quantidade }}</td>
                                     <td class="py-2 px-4">{{ $alimento->validade }}</td>
                                     <td class="py-2 px-4">{{ $alimento->categoria ? $alimento->categoria->nome : '-' }}</td>
+                                    <td class="py-2 px-4">
+                                        @if ($alimento->sugestao)
+                                            <span class="text-green-600 text-sm">Sugestão: {{ $alimento->sugestao }}</span>
+                                        @else
+                                            <span class="text-gray-500 text-sm">Nenhuma sugestão</span>
+                                        @endif
+                                    </td>
                                     <td class="py-2 px-4">
                                         <a href="{{ route('alimentos.edit', $alimento) }}" class="text-blue-600 underline">Editar</a>
                                         <form action="{{ route('alimentos.destroy', $alimento) }}" method="POST" style="display:inline;">

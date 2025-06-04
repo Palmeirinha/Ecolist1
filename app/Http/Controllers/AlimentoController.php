@@ -11,19 +11,25 @@ class AlimentoController extends Controller
     /**
      * Exibe a lista de alimentos do usuário, com filtro por categoria.
      */
-    public function index(Request $request)
+    public function index(Request $request, ReceitaService $receitaService)
     {
-        $categorias = Categoria::all(); // Busca todas as categorias
-        $query = Alimento::where('user_id', auth()->id()); // Alimentos do usuário autenticado
+        $categoriaId = $request->input('categoria_id');
+        $query = Alimento::where('user_id', auth()->id()); // Garante que só mostra alimentos do usuário
 
-        // Aplica filtro por categoria, se informado
-        if ($request->filled('categoria_id')) {
-            $query->where('categoria_id', $request->categoria_id);
+        if ($categoriaId) {
+            $query->where('categoria_id', $categoriaId);
         }
 
-        $alimentos = $query->get(); // Recupera os alimentos filtrados
+        $alimentos = $query->get();
 
-        return view('alimentos.index', compact('alimentos', 'categorias'));
+        foreach ($alimentos as $alimento) {
+            $receitas = $receitaService->buscarReceitas($alimento->nome);
+            $alimento->sugestao = $receitas[0]['strMeal'] ?? null;
+        }
+
+        $categorias = Categoria::all();
+
+        return view('alimentos.index', compact('alimentos', 'categorias', 'categoriaId'));
     }
 
     /**
@@ -42,13 +48,12 @@ class AlimentoController extends Controller
     {
         // Validação dos dados do formulário
         $request->validate([
-            'nome' => 'required|string|max:255',
-            'tipo_quantidade' => 'required|in:unidade,quilo',
+            'nome' => 'required|string|max:255|regex:/^[A-Za-zÀ-ú\s]+$/',
+            'tipo_quantidade' => 'required|in:unidade,quilo,litro',
             'quantidade' => [
                 'required',
                 'integer',
                 'min:1',
-                // Validação personalizada para quantidade máxima
                 function($attribute, $value, $fail) use ($request) {
                     if ($request->tipo_quantidade === 'quilo' && $value > 10) {
                         $fail('A quantidade em quilos não pode ser maior que 10.');
@@ -61,9 +66,45 @@ class AlimentoController extends Controller
             'validade' => 'required|date|after_or_equal:today',
         ], [
             'nome.required' => 'O nome do alimento é obrigatório.',
+            'nome.regex' => 'O nome deve conter apenas letras e espaços.',
             'quantidade.min' => 'A quantidade deve ser pelo menos 1.',
             'validade.after_or_equal' => 'A validade deve ser uma data futura.',
         ]);
+
+        // --- INÍCIO DA VERIFICAÇÃO DE NOME X CATEGORIA ---
+        $mapaCategoria = [
+            'frutas' => ['maçã', 'banana', 'melancia', 'limão', 'laranja', 'manga', 'uva', 'abacaxi', 'goiaba', 'morango', 'kiwi', 'pera', 'pêssego', 'ameixa', 'caju', 'graviola', 'acerola', 'framboesa', 'maracujá', 'figo'],
+            'verduras' => ['alface', 'rúcula', 'espinafre', 'couve', 'agrião', 'repolho', 'acelga', 'radite', 'mostarda', 'almeirão', 'endívia', 'chicória', 'escarola', 'ervilha'],
+            'legumes' => ['cenoura', 'batata', 'abobrinha', 'pepino', 'chuchu', 'berinjela', 'beterraba', 'mandioca', 'inhame', 'cará', 'abóbora', 'pimentão', 'tomate', 'milho'],
+            'carnes' => ['carne', 'bovina', 'porco', 'lombo', 'frango', 'filé', 'picanha', 'costela', 'moída', 'linguiça', 'pernil', 'alcatra', 'maminha', 'peito', 'coxinha', 'coxa', 'tilápia', 'salmão', 'atum', 'peixe'],
+            'bebidas' => ['água', 'refrigerante', 'suco', 'cerveja', 'vinho', 'chá', 'café', 'achocolatado', 'milkshake', 'isotônico', 'energético', 'licor', 'leite', 'vodka', 'rum', 'whisky'],
+        ];
+
+        $nome = strtolower($request->nome);
+        $categoria = \App\Models\Categoria::find($request->categoria_id);
+
+        if ($categoria) {
+            $categoriaNome = strtolower($categoria->nome);
+
+            if (isset($mapaCategoria[$categoriaNome])) {
+                $permitidos = $mapaCategoria[$categoriaNome];
+                $encontrou = false;
+
+                foreach ($permitidos as $palavra) {
+                    if (str_contains($nome, $palavra)) {
+                        $encontrou = true;
+                        break;
+                    }
+                }
+
+                if (!$encontrou) {
+                    return back()->withInput()->withErrors([
+                        'nome' => 'O nome do alimento não condiz com a categoria "' . $categoria->nome . '".'
+                    ]);
+                }
+            }
+        }
+        // --- FIM DA VERIFICAÇÃO DE NOME X CATEGORIA ---
 
         // Verifica se já existe alimento com o mesmo nome para o usuário
         $existe = \App\Models\Alimento::where('user_id', auth()->id())
@@ -75,6 +116,16 @@ class AlimentoController extends Controller
             return back()
                 ->withInput()
                 ->withErrors(['nome' => 'Você já cadastrou um alimento com esse nome.']);
+        }
+
+        $categoria = \App\Models\Categoria::find($request->categoria_id);
+
+        if ($categoria && strtolower($categoria->nome) === 'bebidas') {
+            if ($request->tipo_quantidade === 'quilo') {
+                return back()->withInput()->withErrors([
+                    'tipo_quantidade' => 'O tipo de quantidade "quilo" não é permitido para bebidas. Por favor, escolha "unidade" ou "litro".'
+                ]);
+            }
         }
 
         // Cria o alimento
@@ -118,13 +169,12 @@ class AlimentoController extends Controller
 
         // Validação dos dados do formulário
         $request->validate([
-            'nome' => 'required|string|max:255',
-            'tipo_quantidade' => 'required|in:unidade,quilo',
+            'nome' => 'required|string|max:255|regex:/^[A-Za-zÀ-ú\s]+$/',
+            'tipo_quantidade' => 'required|in:unidade,quilo,litro',
             'quantidade' => [
                 'required',
                 'integer',
                 'min:1',
-                // Validação personalizada para quantidade máxima
                 function($attribute, $value, $fail) use ($request) {
                     if ($request->tipo_quantidade === 'quilo' && $value > 10) {
                         $fail('A quantidade em quilos não pode ser maior que 10.');
@@ -137,9 +187,55 @@ class AlimentoController extends Controller
             'validade' => 'required|date|after_or_equal:today',
         ], [
             'nome.required' => 'O nome do alimento é obrigatório.',
+            'nome.regex' => 'O nome deve conter apenas letras e espaços.',
             'quantidade.min' => 'A quantidade deve ser pelo menos 1.',
             'validade.after_or_equal' => 'A validade deve ser uma data futura.',
         ]);
+
+        // --- INÍCIO DA VERIFICAÇÃO DE NOME X CATEGORIA ---
+        $mapaCategoria = [
+            'frutas' => ['maçã', 'banana', 'melancia', 'limão', 'laranja', 'manga', 'uva', 'abacaxi', 'goiaba', 'morango', 'kiwi', 'pera', 'pêssego', 'ameixa', 'caju', 'graviola', 'acerola', 'framboesa', 'maracujá', 'figo'],
+            'verduras' => ['alface', 'rúcula', 'espinafre', 'couve', 'agrião', 'repolho', 'acelga', 'radite', 'mostarda', 'almeirão', 'endívia', 'chicória', 'escarola', 'ervilha'],
+            'legumes' => ['cenoura', 'batata', 'abobrinha', 'pepino', 'chuchu', 'berinjela', 'beterraba', 'mandioca', 'inhame', 'cará', 'abóbora', 'pimentão', 'tomate', 'milho'],
+            'carnes' => ['carne', 'bovina', 'porco', 'lombo', 'frango', 'filé', 'picanha', 'costela', 'moída', 'linguiça', 'pernil', 'alcatra', 'maminha', 'peito', 'coxinha', 'coxa', 'tilápia', 'salmão', 'atum', 'peixe'],
+            'bebidas' => ['água', 'refrigerante', 'suco', 'cerveja', 'vinho', 'chá', 'café', 'achocolatado', 'milkshake', 'isotônico', 'energético', 'licor', 'leite', 'vodka', 'rum', 'whisky'],
+        ];
+
+        $nome = strtolower($request->nome);
+        $categoria = \App\Models\Categoria::find($request->categoria_id);
+
+        if ($categoria) {
+            $categoriaNome = strtolower($categoria->nome);
+
+            if (isset($mapaCategoria[$categoriaNome])) {
+                $permitidos = $mapaCategoria[$categoriaNome];
+                $encontrou = false;
+
+                foreach ($permitidos as $palavra) {
+                    if (str_contains($nome, $palavra)) {
+                        $encontrou = true;
+                        break;
+                    }
+                }
+
+                if (!$encontrou) {
+                    return back()->withInput()->withErrors([
+                        'nome' => 'O nome do alimento não condiz com a categoria "' . $categoria->nome . '".'
+                    ]);
+                }
+            }
+        }
+        // --- FIM DA VERIFICAÇÃO DE NOME X CATEGORIA ---
+
+        $categoria = \App\Models\Categoria::find($request->categoria_id);
+
+        if ($categoria && strtolower($categoria->nome) === 'bebidas') {
+            if ($request->tipo_quantidade === 'quilo') {
+                return back()->withInput()->withErrors([
+                    'tipo_quantidade' => 'O tipo de quantidade "quilo" não é permitido para bebidas. Por favor, escolha "unidade" ou "litro".'
+                ]);
+            }
+        }
 
         // Atualiza o alimento
         $alimento->update([

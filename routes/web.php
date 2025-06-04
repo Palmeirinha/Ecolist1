@@ -4,6 +4,7 @@ use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AlimentoController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ReceitaController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -17,6 +18,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     Route::resource('alimentos', AlimentoController::class);
     Route::get('/receitas', [AlimentoController::class, 'receitas'])->middleware('auth')->name('alimentos.receitas');
+    Route::get('/receitas/sugestoes', [ReceitaController::class, 'sugerirReceitas'])->middleware(['auth']);
 });
 
 require __DIR__.'/auth.php';
