@@ -13,12 +13,12 @@ return new class extends Migration
     {
         Schema::create('alimentos', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->string('nome');
+            $table->enum('tipo_quantidade', ['unidade', 'quilo', 'litro']);
             $table->integer('quantidade');
             $table->date('validade');
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->timestamps();
-            // ... outros campos, como alertado, se você adicionou
         });
     }
 

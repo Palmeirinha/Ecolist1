@@ -1,49 +1,66 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full">
 <head>
-    <meta charset="UTF-8">
-    <title>{{ config('app.name', 'EcoList') }}</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss/dist/tailwind.min.css">
-</head>
-<body>
-    <header class="bg-gray-800 text-white p-4 flex justify-between items-center">
-        <div>
-            <a href="{{ route('dashboard') }}" class="mr-4 hover:underline">Dashboard</a>
-            <a href="{{ route('alimentos.index') }}" class="mr-4 hover:underline">Alimentos</a>
-            <a href="{{ route('alimentos.create') }}" class="mr-4 hover:underline">Novo Alimento</a>
-            <!-- Botão de logout -->
-            <form method="POST" action="{{ route('logout') }}" style="display:inline;">
-                @csrf
-                <button type="submit" class="ml-4 text-red-400 hover:underline bg-transparent border-none cursor-pointer">
-                    Sair
-                </button>
-            </form>
-            <!-- Botão para alternar cor -->
-            <button onclick="toggleTheme()" id="themeBtn" class="ml-4 px-2 py-1 rounded bg-gray-200 text-gray-800">Modo escuro</button>
-        </div>
-    </header>
-    <main>
-        {{ $slot ?? '' }}
-        @yield('content')
-    </main>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="csrf-token" content="{{ csrf_token() }}">
+        <meta name="description" content="EcoList - Gerencie seus alimentos e evite desperdício">
+        <meta name="theme-color" content="#16a34a">
 
-    <script>
-    function toggleTheme() {
-        const body = document.body;
-        const btn = document.getElementById('themeBtn');
-        if (body.classList.contains('bg-black')) {
-            body.classList.remove('bg-black', 'text-white');
-            body.classList.add('bg-white', 'text-gray-900');
-            btn.textContent = 'Modo escuro';
-        } else {
-            body.classList.remove('bg-white', 'text-gray-900');
-            body.classList.add('bg-black', 'text-white');
-            btn.textContent = 'Modo claro';
-        }
-    }
-    document.addEventListener('DOMContentLoaded', function() {
-        document.body.classList.add('bg-white', 'text-gray-900');
-    });
-    </script>
-</body>
+        <title>{{ config('app.name', 'Laravel') }}</title>
+
+        <!-- Fonts -->
+        <link rel="preconnect" href="https://fonts.bunny.net">
+        <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
+
+        <!-- Scripts -->
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
+        
+        <!-- PWA -->
+        <link rel="manifest" href="/manifest.json">
+        <link rel="apple-touch-icon" href="/icon-192x192.png">
+
+        <!-- Chart.js -->
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+    <body class="font-sans antialiased min-h-full bg-gray-50">
+        <div class="min-h-screen flex flex-col">
+            @include('layouts.navigation')
+
+            <!-- Page Heading -->
+            @if (isset($header))
+                <header class="bg-white shadow">
+                    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+                        {{ $header }}
+                    </div>
+                </header>
+            @endif
+
+            <!-- Page Content -->
+            <main class="flex-1 py-6">
+                <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                    {{ $slot }}
+                </div>
+            </main>
+        </div>
+
+        <!-- Scripts -->
+        <script>
+            // Registrar Service Worker para PWA
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/sw.js')
+                        .then(registration => {
+                            console.log('ServiceWorker registrado com sucesso:', registration);
+                        })
+                        .catch(error => {
+                            console.log('Falha ao registrar ServiceWorker:', error);
+                        });
+                });
+            }
+        </script>
+
+        <!-- Stack de Scripts -->
+        @stack('scripts')
+    </body>
 </html>

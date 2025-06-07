@@ -3,49 +3,65 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
+use App\Models\Alimento;
+use App\Models\User;
+use App\Models\Alerta;
+use Carbon\Carbon;
 
 class AlertaVencimentoAlimentos extends Command
 {
     /**
-     * O nome e assinatura do comando no terminal.
+     * O nome e a assinatura do comando do console.
      *
      * @var string
      */
     protected $signature = 'alerta:vencimento-alimentos';
 
     /**
-     * A descrição do comando no terminal.
+     * A descrição do comando do console.
      *
      * @var string
      */
-    protected $description = 'Command description';
+    protected $description = 'Gera alertas sobre alimentos próximos do vencimento';
 
     /**
-     * Executa o comando.
+     * Execute o comando do console.
      */
     public function handle()
     {
-        $dias = 3; // Número de dias antes do vencimento para alertar
+        $this->info('Iniciando verificação de alimentos próximos do vencimento...');
 
-        // Busca alimentos que ainda não foram alertados e que vencem nos próximos $dias dias
-        $alimentos = \App\Models\Alimento::where('alertado', false)
-            ->whereDate('validade', '<=', now()->addDays($dias))
-            ->whereDate('validade', '>=', now())
-            ->get();
+        // Busca todos os usuários ativos
+        $users = User::all();
 
-        // Para cada alimento encontrado
-        foreach ($alimentos as $alimento) {
-            $user = $alimento->user; // Obtém o usuário dono do alimento
+        foreach ($users as $user) {
+            // Busca alimentos que vencem em até 7 dias
+            $alimentosProximosVencimento = Alimento::where('user_id', $user->id)
+                ->where('validade', '<=', Carbon::now()->addDays(7))
+                ->where('validade', '>=', Carbon::now())
+                ->whereDoesntHave('alertas', function($query) {
+                    $query->where('created_at', '>=', Carbon::now()->subDays(1));
+                })
+                ->orderBy('validade')
+                ->get();
 
-            // Envia o e-mail de alerta de vencimento (utiliza uma Mailable)
-            \Mail::to($user->email)->send(new \App\Mail\AlertaVencimentoAlimento($alimento));
-
-            // Marca o alimento como alertado para não enviar novamente
-            $alimento->alertado = true;
-            $alimento->save();
+            if ($alimentosProximosVencimento->isNotEmpty()) {
+                foreach ($alimentosProximosVencimento as $alimento) {
+                    // Cria um alerta para cada alimento
+                    Alerta::create([
+                        'user_id' => $user->id,
+                        'alimento_id' => $alimento->id,
+                        'mensagem' => "O alimento {$alimento->nome} vence em {$alimento->dias_restantes} dias",
+                        'tipo' => 'vencimento',
+                        'lido' => false
+                    ]);
+                }
+                
+                $this->info("Alertas gerados para o usuário {$user->name}");
+                \Log::info("Alertas de vencimento gerados para o usuário {$user->name}");
+            }
         }
 
-        // Exibe mensagem de sucesso no terminal
-        $this->info('Alertas de vencimento enviados!');
+        $this->info('Verificação concluída!');
     }
 }

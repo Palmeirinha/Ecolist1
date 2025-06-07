@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('alimentos', function (Blueprint $table) {
-            $table->string('tipo_quantidade')->default('unidade');
+            $table->softDeletes();
         });
     }
 
@@ -22,7 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('alimentos', function (Blueprint $table) {
-            $table->dropColumn('tipo_quantidade');
+            $table->dropSoftDeletes();
         });
     }
-};
+}; 

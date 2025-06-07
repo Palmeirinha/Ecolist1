@@ -13,12 +13,13 @@ Route::get('/', function () {
 Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::get('/perfil', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/perfil', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/perfil', [ProfileController::class, 'destroy'])->name('profile.destroy');
     Route::resource('alimentos', AlimentoController::class);
-    Route::get('/receitas', [AlimentoController::class, 'receitas'])->middleware('auth')->name('alimentos.receitas');
-    Route::get('/receitas/sugestoes', [ReceitaController::class, 'sugerirReceitas'])->middleware(['auth']);
+    Route::get('/receitas', [AlimentoController::class, 'buscarReceitas'])->name('alimentos.receitas');
+    Route::get('/receitas/buscar', [ReceitaController::class, 'buscar'])->name('receitas.buscar');
+    Route::get('/receitas/sugestoes', [ReceitaController::class, 'sugerirReceitas']);
 });
 
 require __DIR__.'/auth.php';

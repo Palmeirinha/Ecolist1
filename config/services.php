@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'receitas-api' => [
+        'base_url' => 'https://api-receitas-pi.vercel.app',
+    ],
+
 ];

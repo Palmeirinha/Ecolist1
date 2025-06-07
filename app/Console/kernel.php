@@ -16,20 +16,29 @@ class Kernel extends ConsoleKernel
     ];
 
     /**
-     * Define o agendamento dos comandos.
-     * Aqui você pode agendar tarefas para serem executadas periodicamente.
+     * Define o cronograma de comandos da aplicação.
      */
-    protected function schedule(Schedule $schedule)
+    protected function schedule(Schedule $schedule): void
     {
-        // Agenda o comando 'alerta:vencimento-alimentos' para rodar diariamente
-        $schedule->command('alerta:vencimento-alimentos')->daily();
+        // Executa o backup do banco de dados todos os dias às 01:00
+        $schedule->command('backup:database')
+                ->dailyAt('01:00')
+                ->appendOutputTo(storage_path('logs/backup.log'));
+
+        // Limpa o cache todos os dias às 00:00
+        $schedule->command('cache:clear')->daily();
+
+        // Remove alimentos excluídos há mais de 30 dias (exclusão permanente)
+        $schedule->command('model:prune', [
+            '--model' => [App\Models\Alimento::class],
+            '--days' => 30,
+        ])->daily();
     }
 
     /**
-     * Registra os comandos do aplicativo.
-     * Carrega comandos personalizados e inclui o arquivo de rotas do console.
+     * Registra os comandos da aplicação.
      */
-    protected function commands()
+    protected function commands(): void
     {
         // Carrega todos os comandos personalizados do diretório Commands
         $this->load(__DIR__.'/Commands');

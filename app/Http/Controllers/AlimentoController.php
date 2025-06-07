@@ -7,224 +7,189 @@ use App\Services\ReceitaService;
 use App\Models\Categoria;
 use App\Http\Requests\AlimentoRequest;
 
+/**
+ * Controlador responsável pelo gerenciamento de alimentos
+ * Implementa as operações CRUD e funcionalidades relacionadas
+ */
 class AlimentoController extends Controller
 {
     /**
-     * Exibe a lista de alimentos do usuário, com filtro por categoria.
+     * Exibe a lista de alimentos do usuário
+     * Permite filtrar por categoria e inclui sugestões de receitas
+     * 
+     * @param Request $request
+     * @param ReceitaService $receitaService
+     * @return \Illuminate\View\View
      */
     public function index(Request $request, ReceitaService $receitaService)
     {
+        // Obtém o filtro de categoria se existir
         $categoriaId = $request->input('categoria_id');
-        $query = Alimento::where('user_id', auth()->id()); // Garante que só mostra alimentos do usuário
+        
+        // Inicia a query base com relacionamento de categoria
+        $query = Alimento::with('categoria')->where('user_id', auth()->id());
 
+        // Aplica filtro por categoria se solicitado
         if ($categoriaId) {
             $query->where('categoria_id', $categoriaId);
         }
 
-        $alimentos = $query->get();
+        // Executa a query com paginação
+        $alimentos = $query->paginate(15);
+        
+        // Carrega todas as categorias para o filtro
+        $categorias = Categoria::orderBy('nome')->get();
 
+        // Busca sugestões de receitas em lote
+        $nomes = $alimentos->pluck('nome')->toArray();
+        $receitasLote = $receitaService->buscarReceitasEmLote($nomes);
+
+        // Associa as receitas aos alimentos
         foreach ($alimentos as $alimento) {
-            $receitas = $receitaService->buscarReceitas($alimento->nome);
-            $alimento->sugestao = $receitas[0]['strMeal'] ?? null;
+            if (isset($receitasLote[$alimento->nome])) {
+                $alimento->sugestao = $receitasLote[$alimento->nome]['strMeal'];
+            }
         }
-
-        $categorias = Categoria::all();
 
         return view('alimentos.index', compact('alimentos', 'categorias', 'categoriaId'));
     }
 
     /**
-     * Exibe o formulário para cadastrar um novo alimento.
+     * Exibe o formulário para cadastrar um novo alimento
+     * 
+     * @return \Illuminate\View\View
      */
     public function create()
     {
-        $categorias = Categoria::all(); // Busca todas as categorias
+        $categorias = Categoria::orderBy('nome')->get();
         return view('alimentos.create', compact('categorias'));
     }
 
     /**
-     * Salva um novo alimento no banco de dados.
+     * Salva um novo alimento no banco de dados
+     * Inclui validações e associação com o usuário atual
+     * 
+     * @param AlimentoRequest $request
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function store(AlimentoRequest $request)
     {
-        // --- INÍCIO DA VERIFICAÇÃO DE NOME X CATEGORIA ---
-        $mapaCategoria = [
-            'frutas' => ['maçã', 'banana', 'melancia', 'limão', 'laranja', 'manga', 'uva', 'abacaxi', 'goiaba', 'morango', 'kiwi', 'pera', 'pêssego', 'ameixa', 'caju', 'graviola', 'acerola', 'framboesa', 'maracujá', 'figo'],
-            'verduras' => ['alface', 'rúcula', 'espinafre', 'couve', 'agrião', 'repolho', 'acelga', 'radite', 'mostarda', 'almeirão', 'endívia', 'chicória', 'escarola', 'ervilha'],
-            'legumes' => ['cenoura', 'batata', 'abobrinha', 'pepino', 'chuchu', 'berinjela', 'beterraba', 'mandioca', 'inhame', 'cará', 'abóbora', 'pimentão', 'tomate', 'milho'],
-            'carnes' => ['carne', 'bovina', 'porco', 'lombo', 'frango', 'filé', 'picanha', 'costela', 'moída', 'linguiça', 'pernil', 'alcatra', 'maminha', 'peito', 'coxinha', 'coxa', 'tilápia', 'salmão', 'atum', 'peixe'],
-            'bebidas' => ['água', 'refrigerante', 'suco', 'cerveja', 'vinho', 'chá', 'café', 'achocolatado', 'milkshake', 'isotônico', 'energético', 'licor', 'leite', 'vodka', 'rum', 'whisky'],
-        ];
+        try {
+            // Cria o alimento com os dados validados
+            $alimento = new Alimento($request->validated());
+            $alimento->user_id = auth()->id();
+            $alimento->save();
 
-        $nome = strtolower($request->nome);
-        $categoria = \App\Models\Categoria::find($request->categoria_id);
-
-        if ($categoria) {
-            $categoriaNome = strtolower($categoria->nome);
-
-            if (isset($mapaCategoria[$categoriaNome])) {
-                $permitidos = $mapaCategoria[$categoriaNome];
-                $encontrou = false;
-
-                foreach ($permitidos as $palavra) {
-                    if (str_contains($nome, $palavra)) {
-                        $encontrou = true;
-                        break;
-                    }
-                }
-
-                if (!$encontrou) {
-                    return back()->withInput()->withErrors([
-                        'nome' => 'O nome do alimento não condiz com a categoria "' . $categoria->nome . '".'
-                    ]);
-                }
-            }
-        }
-        // --- FIM DA VERIFICAÇÃO DE NOME X CATEGORIA ---
-
-        // Verifica se já existe alimento com o mesmo nome para o usuário
-        $existe = \App\Models\Alimento::where('user_id', auth()->id())
-            ->where('nome', $request->nome)
-            ->first();
-
-        if ($existe) {
-            // Retorna erro se já existir alimento com o mesmo nome
-            return back()
+            return redirect()
+                ->route('alimentos.index')
+                ->with('success', 'Alimento cadastrado com sucesso!');
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
                 ->withInput()
-                ->withErrors(['nome' => 'Você já cadastrou um alimento com esse nome.']);
+                ->with('error', 'Erro ao cadastrar alimento. Tente novamente.');
         }
-
-        $categoria = \App\Models\Categoria::find($request->categoria_id);
-
-        if ($categoria && strtolower($categoria->nome) === 'bebidas') {
-            if ($request->tipo_quantidade === 'quilo') {
-                return back()->withInput()->withErrors([
-                    'tipo_quantidade' => 'O tipo de quantidade "quilo" não é permitido para bebidas. Por favor, escolha "unidade" ou "litro".'
-                ]);
-            }
-        }
-
-        // Cria o alimento
-        Alimento::create([
-            'user_id' => auth()->id(),
-            'nome' => $request->nome,
-            'quantidade' => $request->quantidade,
-            'validade' => $request->validade,
-            'categoria_id' => $request->categoria_id,
-        ]);
-
-        return redirect()->route('alimentos.index')->with('success', 'Alimento cadastrado com sucesso!');
     }
 
     /**
-     * Exibe um alimento específico (não implementado).
-     */
-    public function show(Alimento $alimento)
-    {
-        //
-    }
-
-    /**
-     * Exibe o formulário de edição de um alimento.
+     * Exibe o formulário para editar um alimento existente
+     * 
+     * @param Alimento $alimento
+     * @return \Illuminate\View\View
      */
     public function edit(Alimento $alimento)
     {
-        $categorias = Categoria::all(); // Busca todas as categorias
+        // Verifica se o alimento pertence ao usuário atual
+        if ($alimento->user_id !== auth()->id()) {
+            abort(403, 'Acesso não autorizado.');
+        }
+
+        // Carrega o relacionamento com categoria
+        $alimento->load('categoria');
+        
+        $categorias = Categoria::orderBy('nome')->get();
         return view('alimentos.edit', compact('alimento', 'categorias'));
     }
 
     /**
-     * Atualiza os dados de um alimento existente.
+     * Atualiza um alimento existente no banco de dados
+     * 
+     * @param AlimentoRequest $request
+     * @param Alimento $alimento
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function update(AlimentoRequest $request, Alimento $alimento)
     {
-        // Garante que só o dono pode editar
-        if ($alimento->user_id !== auth()->id()) {
-            abort(403);
-        }
-
-        // --- INÍCIO DA VERIFICAÇÃO DE NOME X CATEGORIA ---
-        $mapaCategoria = [
-            'frutas' => ['maçã', 'banana', 'melancia', 'limão', 'laranja', 'manga', 'uva', 'abacaxi', 'goiaba', 'morango', 'kiwi', 'pera', 'pêssego', 'ameixa', 'caju', 'graviola', 'acerola', 'framboesa', 'maracujá', 'figo'],
-            'verduras' => ['alface', 'rúcula', 'espinafre', 'couve', 'agrião', 'repolho', 'acelga', 'radite', 'mostarda', 'almeirão', 'endívia', 'chicória', 'escarola', 'ervilha'],
-            'legumes' => ['cenoura', 'batata', 'abobrinha', 'pepino', 'chuchu', 'berinjela', 'beterraba', 'mandioca', 'inhame', 'cará', 'abóbora', 'pimentão', 'tomate', 'milho'],
-            'carnes' => ['carne', 'bovina', 'porco', 'lombo', 'frango', 'filé', 'picanha', 'costela', 'moída', 'linguiça', 'pernil', 'alcatra', 'maminha', 'peito', 'coxinha', 'coxa', 'tilápia', 'salmão', 'atum', 'peixe'],
-            'bebidas' => ['água', 'refrigerante', 'suco', 'cerveja', 'vinho', 'chá', 'café', 'achocolatado', 'milkshake', 'isotônico', 'energético', 'licor', 'leite', 'vodka', 'rum', 'whisky'],
-        ];
-
-        $nome = strtolower($request->nome);
-        $categoria = \App\Models\Categoria::find($request->categoria_id);
-
-        if ($categoria) {
-            $categoriaNome = strtolower($categoria->nome);
-
-            if (isset($mapaCategoria[$categoriaNome])) {
-                $permitidos = $mapaCategoria[$categoriaNome];
-                $encontrou = false;
-
-                foreach ($permitidos as $palavra) {
-                    if (str_contains($nome, $palavra)) {
-                        $encontrou = true;
-                        break;
-                    }
-                }
-
-                if (!$encontrou) {
-                    return back()->withInput()->withErrors([
-                        'nome' => 'O nome do alimento não condiz com a categoria "' . $categoria->nome . '".'
-                    ]);
-                }
+        try {
+            // Verifica se o alimento pertence ao usuário atual
+            if ($alimento->user_id !== auth()->id()) {
+                abort(403, 'Acesso não autorizado.');
             }
+
+            // Atualiza o alimento com os dados validados
+            $alimento->update($request->validated());
+
+            return redirect()
+                ->route('alimentos.index')
+                ->with('success', 'Alimento atualizado com sucesso!');
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->withInput()
+                ->with('error', 'Erro ao atualizar alimento. Tente novamente.');
         }
-        // --- FIM DA VERIFICAÇÃO DE NOME X CATEGORIA ---
-
-        $categoria = \App\Models\Categoria::find($request->categoria_id);
-
-        if ($categoria && strtolower($categoria->nome) === 'bebidas') {
-            if ($request->tipo_quantidade === 'quilo') {
-                return back()->withInput()->withErrors([
-                    'tipo_quantidade' => 'O tipo de quantidade "quilo" não é permitido para bebidas. Por favor, escolha "unidade" ou "litro".'
-                ]);
-            }
-        }
-
-        // Atualiza o alimento
-        $alimento->update([
-            'nome' => $request->nome,
-            'quantidade' => $request->quantidade,
-            'validade' => $request->validade,
-            'categoria_id' => $request->categoria_id,
-        ]);
-
-        return redirect()->route('alimentos.index')->with('success', 'Alimento atualizado com sucesso!');
     }
 
     /**
-     * Remove um alimento do banco de dados.
+     * Remove um alimento do banco de dados (soft delete)
+     * 
+     * @param Alimento $alimento
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function destroy(Alimento $alimento)
     {
-        // Garante que só o dono pode excluir
-        if ($alimento->user_id !== auth()->id()) {
-            abort(403);
+        try {
+            // Verifica se o alimento pertence ao usuário atual
+            if ($alimento->user_id !== auth()->id()) {
+                abort(403, 'Acesso não autorizado.');
+            }
+
+            // Realiza a exclusão lógica (soft delete)
+            $alimento->delete();
+
+            return redirect()
+                ->route('alimentos.index')
+                ->with('success', 'Alimento removido com sucesso!');
+        } catch (\Exception $e) {
+            return redirect()
+                ->back()
+                ->with('error', 'Erro ao remover alimento. Tente novamente.');
         }
-
-        $alimento->delete(); // Exclui o alimento
-
-        return redirect()->route('alimentos.index')->with('success', 'Alimento excluído com sucesso!');
     }
 
     /**
-     * Exibe receitas baseadas nos alimentos do usuário.
+     * Busca e exibe receitas baseadas nos alimentos do usuário
+     * 
+     * @param ReceitaService $receitaService
+     * @return \Illuminate\View\View
      */
-    public function receitas(ReceitaService $receitaService)
+    public function buscarReceitas(ReceitaService $receitaService)
     {
-        $alimentos = Alimento::where('user_id', auth()->id())->pluck('nome')->toArray(); // Nomes dos alimentos do usuário
-        $receitas = [];
+        // Obtém todos os alimentos do usuário
+        $alimentos = Alimento::where('user_id', auth()->id())->pluck('nome')->toArray();
+        $todasReceitas = [];
+
         // Busca receitas para cada alimento
         foreach ($alimentos as $alimento) {
-            $receitas = array_merge($receitas, $receitaService->buscarReceitas($alimento));
+            $receitas = $receitaService->buscarReceitas($alimento);
+            if (!empty($receitas)) {
+                $todasReceitas = array_merge($todasReceitas, $receitas);
+            }
         }
-        return view('alimentos.receitas', compact('receitas'));
+
+        // Remove receitas duplicadas
+        $receitasUnicas = collect($todasReceitas)->unique('id')->values()->all();
+
+        return view('alimentos.receitas', ['receitas' => $receitasUnicas]);
     }
 }
